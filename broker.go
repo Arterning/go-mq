@@ -1,6 +1,7 @@
 package main
 
 import (
+	"arterning/go-mq/common"
 	"bufio"
 	"net"
 	"os"
@@ -8,21 +9,26 @@ import (
 	"time"
 )
 
+type Student struct {
+	Name string
+	Sex  string
+}
+
 var topics = sync.Map{}
 
 func handleErr(conn net.Conn) {
 	if err := recover(); err != nil {
 		println(err.(string))
-		conn.Write(MsgToBytes(Msg{MsgType: 4}))
+		conn.Write(common.MsgToBytes(common.Msg{MsgType: 4}))
 	}
 }
 
 func Process(conn net.Conn) {
 	defer handleErr(conn)
 	reader := bufio.NewReader(conn)
-	msg := BytesToMsg(reader)
+	msg := common.BytesToMsg(reader)
 	queue, ok := topics.Load(msg.Topic)
-	var res Msg
+	var res common.Msg
 	if msg.MsgType == 1 {
 		// comsumer
 		if queue == nil || queue.(*Queue).len == 0 {
@@ -39,16 +45,16 @@ func Process(conn net.Conn) {
 			topics.Store(msg.Topic, queue)
 		}
 		queue.(*Queue).offer(msg)
-		res = Msg{Id: msg.Id, MsgType: 2}
+		res = common.Msg{Id: msg.Id, MsgType: 2}
 	} else if msg.MsgType == 3 {
-		// consumer ack
+		// main.go ack
 		if queue == nil {
 			return
 		}
 		queue.(*Queue).delete(msg.Id)
 
 	}
-	conn.Write(MsgToBytes(res))
+	conn.Write(common.MsgToBytes(res))
 
 }
 
@@ -66,7 +72,7 @@ func Save() {
 					file, _ = os.Create(key.(string))
 				}
 				for msg := value.(*Queue).data.Front(); msg != nil; msg = msg.Next() {
-					file.Write(MsgToBytes(msg.Value.(Msg)))
+					file.Write(common.MsgToBytes(msg.Value.(common.Msg)))
 				}
 				file.Close()
 				return false
